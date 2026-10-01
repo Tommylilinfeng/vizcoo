@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>vizcoo workflow</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #0a0a0a; color: #e5e5e5;
+    font-family: 'Geist Sans', 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; }
+  #deck { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .slide { display: none; width: 100%; max-width: 980px; padding: 0 40px; }
+  .slide.active { display: flex; flex-direction: column; align-items: center; }
+  .num { position: fixed; top: 24px; right: 32px; font-size: 12px; color: #525252; letter-spacing: 0.06em; }
+  .hint { position: fixed; bottom: 24px; right: 32px; font-size: 11px; color: #404040; letter-spacing: 0.06em; }
+  .head { text-align: center; margin-bottom: 44px; }
+  h1 { font-size: 38px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 10px; }
+  .sub { color: #737373; font-size: 14px; letter-spacing: 0.04em; }
+  pre { font-family: 'Geist Mono', 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+    font-size: 16px; line-height: 2; color: #e5e5e5;
+    background: #111; border: 1px solid #1f1f1f; border-radius: 8px;
+    padding: 36px 44px; white-space: pre; display: inline-block; text-align: left; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; max-width: 760px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; width: 100%; max-width: 820px; }
+  .card { background: #111; border: 1px solid #1f1f1f; border-radius: 8px; padding: 24px 26px; text-align: center; }
+  .card .label { font-size: 11px; color: #737373; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 14px; }
+  .card .body { font-size: 16px; color: #e5e5e5; line-height: 1.8; }
+  .gap { height: 22px; }
+  .k { color: #a3e635; }
+  .v { color: #fbbf24; }
+  .c { color: #737373; }
+  .arrow { color: #525252; }
+  .green { color: #86efac; }
+  .yellow { color: #fde047; }
+  .blue { color: #93c5fd; }
+  .pink { color: #fda4af; }
+</style>
+</head>
+<body>
+<div id="deck">
+
+<!-- 1 -->
+<section class="slide active">
+  <div class="head"><h1>vizcoo workflow</h1><div class="sub">overview · 9 slides</div></div>
+<pre>
+<span class="c">on launch</span>
+  <span class="arrow">└─</span> open local database          <span class="c">embedded SQLite, write-ahead log</span>
+  <span class="arrow">└─</span> index project                 <span class="c">scan → edges → buckets → naming</span>
+  <span class="arrow">└─</span> start server                  <span class="c">single port, three channels</span>
+       <span class="arrow">├─</span> HTTP API                <span class="c">request / response</span>
+       <span class="arrow">├─</span> push channel             <span class="c">server → browser notifications</span>
+       <span class="arrow">└─</span> terminal channel         <span class="c">embed Claude Code TUI</span>
+  <span class="arrow">└─</span> watch filesystem              <span class="c">react to disk changes</span>
+  <span class="arrow">└─</span> heartbeat poller              <span class="c">detect dead sessions</span>
+  <span class="arrow">└─</span> summary orchestrator          <span class="c">condense activity into prose</span>
+</pre>
+</section>
+
+<!-- 2 -->
+<section class="slide">
+  <div class="head"><h1>indexing pipeline</h1><div class="sub">cold-start: turn a folder into a graph</div></div>
+<pre>
+<span class="green">scan</span>          <span class="c">walk tree, honor gitignore + denylist</span>
+   <span class="arrow">↓</span>
+<span class="green">prune</span>         <span class="c">drop rows for files no longer on disk</span>
+   <span class="arrow">↓</span>
+for each file:
+  <span class="green">parse imports</span>  <span class="c">resolve specifiers → file-to-file edges</span>
+   <span class="arrow">↓</span>
+<span class="green">classify</span>      <span class="c">framework detector hits ? use it : heuristic</span>
+   <span class="arrow">↓</span>
+<span class="green">reconcile</span>     <span class="c">diff with DB; preserve user-edited names</span>
+   <span class="arrow">↓</span>
+<span class="green">aggregate</span>     <span class="c">fingerprint match → cache; else → call LLM</span>
+   <span class="arrow">↓</span>
+<span class="yellow">stats</span>         <span class="c">files · edges · modules · status</span>
+</pre>
+</section>
+
+<!-- 3 -->
+<section class="slide">
+  <div class="head"><h1>edges</h1><div class="sub">one import → one file-to-file edge</div></div>
+  <div class="grid2">
+    <div class="card">
+      <div class="label">drawn</div>
+      <div class="body">
+        <span class="green">relative imports</span> within the project<br>
+        resolved against disk
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">skipped</div>
+      <div class="body">
+        <span class="pink">third-party packages</span> — noise<br>
+        <span class="pink">type-only imports</span> — gone at runtime
+      </div>
+    </div>
+  </div>
+  <div class="gap"></div>
+<pre>
+<span class="c">write strategy: replace all edges from this file, then insert new ones</span>
+<span class="c">→ no ghost lines, only one file affected per change</span>
+</pre>
+</section>
+
+<!-- 4 -->
+<section class="slide">
+  <div class="head"><h1>module discovery & naming</h1><div class="sub">heuristics decide structure · LLM only labels</div></div>
+<pre>
+group by <span class="v">top-level folder</span>
+   <span class="arrow">↓</span>
+folder is an outlier (statistical, large) → drill into <span class="v">second level</span>
+   <span class="arrow">↓</span>
+buckets with too few files → fold back into parent
+   <span class="arrow">↓</span>
+collect frequent export names → hint card for the LLM
+   <span class="arrow">↓</span>
+<span class="yellow">fingerprint</span> = hash(bucket names + member files)
+   <span class="arrow">↓</span>
+matches cache → <span class="green">reuse stored names</span>   (zero LLM cost)
+otherwise     → ask LLM for human name + one-line description
+on failure    → <span class="pink">fall back to bucket name</span>   (visibly degraded)
+</pre>
+</section>
+
+<!-- 5 -->
+<section class="slide">
+  <div class="head"><h1>storage</h1><div class="sub">embedded SQLite · seven tables · three layers</div></div>
+  <div class="grid3">
+    <div class="card">
+      <div class="label blue">graph layer</div>
+      <div class="body">files<br>edges<br>modules<br>tiers</div>
+    </div>
+    <div class="card">
+      <div class="label yellow">relations layer</div>
+      <div class="body">module-to-module<br>relations</div>
+    </div>
+    <div class="card">
+      <div class="label green">timeline layer</div>
+      <div class="body">per-turn<br>module summaries</div>
+    </div>
+  </div>
+  <div class="gap"></div>
+<pre>
+<span class="c">invariants</span>
+  <span class="arrow">·</span> edges live only at <span class="v">file level</span>; module edges are computed on demand
+  <span class="arrow">·</span> machine name and display name are <span class="v">separate columns</span> — user edits always win
+  <span class="arrow">·</span> expensive work runs only when the underlying fingerprint changes
+</pre>
+</section>
+
+<!-- 6 -->
+<section class="slide">
+  <div class="head"><h1>three channels, one port</h1><div class="sub">request · push · terminal</div></div>
+<pre>
+browser
+   <span class="arrow">│</span>
+   <span class="arrow">├─</span> <span class="v">HTTP</span>           <span class="c">read snapshots, trigger user actions    "press button"</span>
+   <span class="arrow">├─</span> <span class="v">push channel</span>   <span class="c">receive "data changed", then refetch    "doorbell"</span>
+   <span class="arrow">└─</span> <span class="v">terminal</span>       <span class="c">stream keys ↔ stream output             "video call"</span>
+                       <span class="arrow">↓</span>
+              one HTTP server, routed by URL
+                <span class="arrow">·</span> tiny per-endpoint handlers, direct queries, no layers
+                <span class="arrow">·</span> push channel broadcasts a tag; clients refetch on demand
+                <span class="arrow">·</span> terminal channel spawns a Claude TUI process per connection
+</pre>
+</section>
+
+<!-- 7 -->
+<section class="slide">
+  <div class="head"><h1>embedding the terminal</h1><div class="sub">a real CLI inside the browser</div></div>
+<pre>
+browser                         server                          kernel
+───────                         ──────                          ──────
+terminal emulator                                               pseudo-terminal
+  screen buffer    <span class="arrow">←──</span> output bytes (colors, cursor) <span class="arrow">───</span> child stdout
+  ANSI parser                                                     <span class="arrow">↑</span>
+  key 'h'          <span class="arrow">───</span> 'h' raw byte <span class="arrow">────────────────────</span> child stdin
+
+  resize observer  <span class="arrow">───</span> {resize, cols, rows} <span class="arrow">─────────→</span> tell kernel + signal child
+</pre>
+  <div class="gap"></div>
+<pre>
+<span class="c">server is byte-transparent: never parses ANSI, just shuttles streams</span>
+<span class="c">cleanup is two-way: closing the browser kills the child; child exit closes the socket</span>
+</pre>
+</section>
+
+<!-- 8 -->
+<section class="slide">
+  <div class="head"><h1>live loop</h1><div class="sub">three listeners → one push channel → browser</div></div>
+<pre>
+<span class="green">filesystem watcher</span>   disk changed         <span class="arrow">→</span> reparse one file, broadcast <span class="v">update</span>
+<span class="green">CC hooks</span>             Claude announces it    <span class="arrow">→</span> broadcast <span class="v">pending / done</span>
+                     pre / post / start / stop, &lt;300ms, fire-and-forget
+<span class="green">heartbeat poller</span>     1s pid liveness check  <span class="arrow">→</span> broadcast <span class="v">session-dead</span>
+                     catches hard exits the hooks miss
+</pre>
+  <div class="gap"></div>
+<pre>
+<span class="c">why three? none alone is reliable.</span>
+  <span class="arrow">·</span> hooks are clean but a force-kill skips them
+  <span class="arrow">·</span> watcher is accurate but identity-blind
+  <span class="arrow">·</span> poller is the safety net
+</pre>
+</section>
+
+<!-- 9 -->
+<section class="slide">
+  <div class="head"><h1>AI provider & turn summary</h1><div class="sub">user's own Claude CLI · grouped per module</div></div>
+<pre>
+<span class="green">AI provider</span>     one method: complete(prompt) → text
+                backed by the user's installed Claude binary
+                zero config · reuses their plan · cancellable
+
+<span class="green">turn tracker</span>    state machine over the hook stream
+                pre   → mark a tool in flight
+                post  → record change · debounce idle window
+                stop  → flush, mark final
+
+<span class="green">orchestrator</span>    on each flush:
+                <span class="arrow">·</span> group changes by top-level module
+                <span class="arrow">·</span> one parallel LLM call per module (with co-touched context)
+                <span class="arrow">·</span> store summary + broadcast tag
+                <span class="arrow">·</span> on failure: visible degraded line, never silent
+</pre>
+</section>
+
+</div>
+
+<div class="num"><span id="cur">1</span> / 9</div>
+<div class="hint">← →   space</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const cur = document.getElementById('cur');
+  let i = 0;
+  function go(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('active', k === i));
+    cur.textContent = String(i + 1);
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); go(i + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(i - 1); }
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(slides.length - 1);
+  });
+  document.addEventListener('click', (e) => {
+    const x = e.clientX, w = window.innerWidth;
+    go(x < w / 3 ? i - 1 : i + 1);
+  });
+</script>
+</body>
+</html>

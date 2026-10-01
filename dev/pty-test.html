@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>vizcoo PTY test</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #0a0e14; color: #cbd5e1; font-family: 'JetBrains Mono', 'SF Mono', monospace; }
+    #header { padding: 6px 12px; font-size: 12px; opacity: 0.6; border-bottom: 1px solid #1e2535; }
+    #term { position: absolute; top: 30px; left: 0; right: 0; bottom: 0; padding: 8px; }
+  </style>
+</head>
+<body>
+  <div id="header">vizcoo PTY test — connected to <code>/pty/test</code></div>
+  <div id="term"></div>
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  <script>
+    const term = new Terminal({
+      fontFamily: 'JetBrains Mono, SF Mono, Menlo, monospace',
+      fontSize: 13,
+      cursorBlink: true,
+      theme: { background: '#0a0e14', foreground: '#cbd5e1', cursor: '#7dd3fc' },
+    })
+    const fit = new FitAddon.FitAddon()
+    term.loadAddon(fit)
+    term.open(document.getElementById('term'))
+    fit.fit()
+
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+    const ws = new WebSocket(`${proto}://${location.host}/pty/test`)
+
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+      term.focus()
+    })
+    ws.addEventListener('message', (e) => { term.write(e.data) })
+    ws.addEventListener('close', () => term.write('\r\n[ws closed]\r\n'))
+
+    term.onData((d) => { if (ws.readyState === 1) ws.send(d) })
+
+    let resizeTimer
+    const ro = new ResizeObserver(() => {
+      clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => {
+        fit.fit()
+        if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+      }, 80)
+    })
+    ro.observe(document.getElementById('term'))
+  </script>
+</body>
+</html>
